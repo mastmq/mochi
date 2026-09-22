@@ -1,12 +1,14 @@
 # Mochi-MQTT Server
 
+> [!NOTE]
+> **This is a detached fork.** The original is [mochi-mqtt/server](https://github.com/mochi-mqtt/server) by mochi-co and contributors, MIT licensed, and all credit for this library belongs to them. It is republished here under `github.com/mastmq/mochi/v2` because upstream stopped merging — `main` has not moved since 2025-03-01 and 47 pull requests are open — and [mast](https://github.com/mastmq/mast) embeds it. See [FORK.md](FORK.md) for what differs.
+
 <p align="center">
     
-![build status](https://github.com/mochi-mqtt/server/actions/workflows/build.yml/badge.svg) 
-[![Coverage Status](https://coveralls.io/repos/github/mochi-mqtt/server/badge.svg?branch=master&v2)](https://coveralls.io/github/mochi-mqtt/server?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mochi-mqtt/server)](https://goreportcard.com/report/github.com/mochi-mqtt/server/v2)
-[![Go Reference](https://pkg.go.dev/badge/github.com/mochi-mqtt/server.svg)](https://pkg.go.dev/github.com/mochi-mqtt/server/v2)
-[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/mochi-mqtt/server/issues)
+![build status](https://github.com/mastmq/mochi/actions/workflows/build.yml/badge.svg) 
+[![Go Report Card](https://goreportcard.com/badge/github.com/mastmq/mochi)](https://goreportcard.com/report/github.com/mastmq/mochi/v2)
+[![Go Reference](https://pkg.go.dev/badge/github.com/mastmq/mochi.svg)](https://pkg.go.dev/github.com/mastmq/mochi/v2)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/mastmq/mochi/issues)
 
 </p>
 
@@ -56,7 +58,7 @@ MQTT v3.0.0 と v3.1.1 のサポートはハイブリッド互換性があると
 クリティカルなイシュー出ない限り、新しいリリースがされるのは週末です。
 
 ## Roadmap
-- 新しい特徴やイベントフックのリクエストは [open an issue](https://github.com/mochi-mqtt/server/issues) へ！
+- 新しい特徴やイベントフックのリクエストは [open an issue](https://github.com/mastmq/mochi/issues) へ！
 - クラスターのサポート
 - メトリックスサポートの強化
 - ファイルベースの設定(Dockerイメージのサポート)
@@ -97,9 +99,9 @@ Mochi MQTTをパッケージとしてインポートするにはほんの数行�
 import (
   "log"
 
-  mqtt "github.com/mochi-mqtt/server/v2"
-  "github.com/mochi-mqtt/server/v2/hooks/auth"
-  "github.com/mochi-mqtt/server/v2/listeners"
+  mqtt "github.com/mastmq/mochi/v2"
+  "github.com/mastmq/mochi/v2/hooks/auth"
+  "github.com/mastmq/mochi/v2/listeners"
 )
 
 func main() {
@@ -196,14 +198,14 @@ mqtt.Options、mqtt.Capabilities、mqtt.Compatibilitiesの構造体はオプシ�
 
 | Type           | Import                                                                   | Info                                                                       |
 |----------------|--------------------------------------------------------------------------|----------------------------------------------------------------------------|
-| Access Control | [mochi-mqtt/server/hooks/auth . AllowHook](hooks/auth/allow_all.go)      | すべてのトピックに対しての読み書きをすべてのクライアントに対して許可します。     | 
-| Access Control | [mochi-mqtt/server/hooks/auth . Auth](hooks/auth/auth.go)                | ルールベースのアクセスコントロール台帳です。                                         | 
-| Persistence    | [mochi-mqtt/server/hooks/storage/bolt](hooks/storage/bolt/bolt.go)       |  [BoltDB](https://dbdb.io/db/boltdb) を使った永続ストレージ (非推奨). | 
-| Persistence    | [mochi-mqtt/server/hooks/storage/badger](hooks/storage/badger/badger.go) | [BadgerDB](https://github.com/dgraph-io/badger)を使った永続ストレージ  | 
-| Persistence    | [mochi-mqtt/server/hooks/storage/redis](hooks/storage/redis/redis.go)    | [Redis](https://redis.io)を使った永続ストレージ                   | 
-| Debugging      | [mochi-mqtt/server/hooks/debug](hooks/debug/debug.go)                    | パケットフローを可視化するデバッグ用のフック                       | 
+| Access Control | [mastmq/mochi/hooks/auth . AllowHook](hooks/auth/allow_all.go)      | すべてのトピックに対しての読み書きをすべてのクライアントに対して許可します。     | 
+| Access Control | [mastmq/mochi/hooks/auth . Auth](hooks/auth/auth.go)                | ルールベースのアクセスコントロール台帳です。                                         | 
+| Persistence    | [mastmq/mochi/hooks/storage/bolt](hooks/storage/bolt/bolt.go)       |  [BoltDB](https://dbdb.io/db/boltdb) を使った永続ストレージ (非推奨). | 
+| Persistence    | [mastmq/mochi/hooks/storage/badger](hooks/storage/badger/badger.go) | [BadgerDB](https://github.com/dgraph-io/badger)を使った永続ストレージ  | 
+| Persistence    | [mastmq/mochi/hooks/storage/redis](hooks/storage/redis/redis.go)    | [Redis](https://redis.io)を使った永続ストレージ                   | 
+| Debugging      | [mastmq/mochi/hooks/debug](hooks/debug/debug.go)                    | パケットフローを可視化するデバッグ用のフック                       | 
 
-たくさんの内部関数が開発者に公開されています、なので、上記の例を使って自分でフックを作ることができます。もし作ったら是非[Open an issue](https://github.com/mochi-mqtt/server/issues)に投稿して教えてください！
+たくさんの内部関数が開発者に公開されています、なので、上記の例を使って自分でフックを作ることができます。もし作ったら是非[Open an issue](https://github.com/mastmq/mochi/issues)に投稿して教えてください！
 
 ### アクセスコントロール
 #### Allow Hook
@@ -472,7 +474,7 @@ Mochi MQTTのパフォーマンスはMosquitto、EMQX、その他などの有名
 
 
 ## Contribution Guidelines
-コントリビューションとフィードバックは両方とも歓迎しています![Open an issue](https://github.com/mochi-mqtt/server/issues)でバグを報告したり、質問したり、新機能のリクエストをしてください。もしプルリクエストするならば下記のガイドラインに従うようにしてください。
+コントリビューションとフィードバックは両方とも歓迎しています![Open an issue](https://github.com/mastmq/mochi/issues)でバグを報告したり、質問したり、新機能のリクエストをしてください。もしプルリクエストするならば下記のガイドラインに従うようにしてください。
 - 合理的で可能な限りテストカバレッジを維持してください
 - なぜPRをしたのかとそのPRの内容について明確にしてください。
 - 有意義な貢献をした場合はSPDX FileContributorタグをファイルにつけてください。
@@ -491,6 +493,5 @@ package name
 
 
 ## Stargazers over time 🥰
-[![Stargazers over time](https://starchart.cc/mochi-mqtt/server.svg)](https://starchart.cc/mochi-mqtt/server)
-Mochi MQTTをプロジェクトで使用していますか？ [是非私達に教えてください!](https://github.com/mochi-mqtt/server/issues)
+Mochi MQTTをプロジェクトで使用していますか？ [是非私達に教えてください!](https://github.com/mastmq/mochi/issues)
 

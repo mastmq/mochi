@@ -12,10 +12,10 @@ import (
 	"time"
 
 	badgerdb "github.com/dgraph-io/badger/v4"
-	mqtt "github.com/mochi-mqtt/server/v2"
-	"github.com/mochi-mqtt/server/v2/hooks/storage"
-	"github.com/mochi-mqtt/server/v2/packets"
-	"github.com/mochi-mqtt/server/v2/system"
+	mqtt "github.com/mastmq/mochi/v2"
+	"github.com/mastmq/mochi/v2/hooks/storage"
+	"github.com/mastmq/mochi/v2/packets"
+	"github.com/mastmq/mochi/v2/system"
 )
 
 const (

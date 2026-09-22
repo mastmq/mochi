@@ -6,14 +6,14 @@ package main
 
 import (
 	"flag"
-	"github.com/mochi-mqtt/server/v2/config"
+	"github.com/mastmq/mochi/v2/config"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
-	mqtt "github.com/mochi-mqtt/server/v2"
+	mqtt "github.com/mastmq/mochi/v2"
 )
 
 func main() {
