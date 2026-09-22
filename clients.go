@@ -92,7 +92,10 @@ func (cl *Clients) Delete(id string) {
 func (cl *Clients) GetByListener(id string) []*Client {
 	cl.RLock()
 	defer cl.RUnlock()
-	clients := make([]*Client, 0, cl.Len())
+	// len(cl.internal) directly, never cl.Len(): Len takes the read lock
+	// again, and a writer arriving between the two acquisitions deadlocks
+	// all three. See clients_deadlock_test.go and upstream #488.
+	clients := make([]*Client, 0, len(cl.internal))
 	for _, client := range cl.internal {
 		if client.Net.Listener == id && !client.Closed() {
 			clients = append(clients, client)
