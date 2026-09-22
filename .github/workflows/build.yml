@@ -1,6 +1,11 @@
 name: build
 
-on: [push, pull_request]
+on:
+    push:
+    pull_request:
+    # actions were disabled while this was a fork, so there has to be a way to
+    # run the suite without inventing a commit for it.
+    workflow_dispatch:
 
 jobs:
   build:
