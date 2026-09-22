@@ -75,10 +75,11 @@ func (l *UnixSock) Serve(establish EstablishFn) {
 
 		if atomic.LoadUint32(&l.end) == 0 {
 			go func() {
-				err = establish(l.id, conn)
-				if err != nil {
-					l.log.Warn("", "error", err)
-				}
+				// A new err, not the loop's: the accept loop keeps
+				// running and several of these goroutines can be in
+				// flight at once, so assigning to the outer variable is
+				// a data race between them.
+				logEstablishError(l.log, establish(l.id, conn))
 			}()
 		}
 	}

@@ -13,6 +13,8 @@ We depend on this library, so we carry the patches we need here rather than wait
 | Change | Upstream |
 | --- | --- |
 | `Clients.GetByListener` no longer takes the read lock recursively | [#488](https://github.com/mochi-mqtt/server/issues/488), fixed identically in [#489](https://github.com/mochi-mqtt/server/pull/489) |
+| A peer that hangs up before sending a packet logs at debug, not warn, and the record has a message | not reported upstream |
+| The accept loops no longer assign to a shared `err` from inside their goroutines | not reported upstream |
 
 Nothing else. Every other line is upstream's, and the intent is to keep it that way: a patch here should be one that upstream has already been offered and has not taken.
 
@@ -23,6 +25,18 @@ Nothing else. Every other line is upstream's, and the intent is to keep it that 
 In practice the trigger is a client connecting while the server is shutting down: `Server.Close` reaches `GetByListener` through `closeListenerClients`, and `attachClient` reaches `Clients.Delete` for a client id that is already known. We found it as an intermittently hanging test suite, but the production shape is worse — a pod told to terminate never exits, and is eventually SIGKILLed with every connection dropped uncleanly.
 
 `clients_deadlock_test.go` drives the race directly. Against unpatched code it wedges and fails on its 20-second deadline; patched it finishes in well under a second.
+
+### The health-check warnings
+
+`listeners/tcp.go`, `net.go` and `unixsock.go` each ran `l.log.Warn("", "error", err)` for any failure to establish a connection. Two things were wrong with that.
+
+The message was empty, so the record reached production as `{"msg":"","level":"WARN","error":"read connection: EOF"}` — a warning that says nothing.
+
+And an `io.EOF` there is not a failure. It is a peer that opened a connection and closed it without speaking MQTT, which is what a TCP health check does. A Kubernetes `readinessProbe` with `tcpSocket` on the MQTT port and the default ten-second period produces **8,640 of these a day, per pod**, which is how a logger stops being read. Found exactly that way, in a running deployment.
+
+An ordinary hang-up now logs at debug; a failure after the client has started speaking MQTT still warns, because then something really did go wrong.
+
+The same three lines also had a data race: `err = establish(...)` inside the spawned goroutine assigns to the `err` declared by the accept loop, and the loop keeps accepting, so several goroutines write the same variable concurrently.
 
 ## The module path
 
