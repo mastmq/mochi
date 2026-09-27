@@ -323,7 +323,11 @@ func (p *Properties) Encode(pkt byte, mods Mods, b *bytes.Buffer, n int) {
 		buf.WriteByte(p.RetainAvailable)
 	}
 
-	if !mods.DisallowProblemInfo && p.canEncode(pkt, PropUser) {
+	// Request Problem Information = 0 withholds user properties sent as
+	// diagnostics, but a PUBLISH is exempt: its user properties are the
+	// publisher's application data, which the server must forward unaltered.
+	// [MQTT-3.1.2-29] [MQTT-3.3.2-17]
+	if (!mods.DisallowProblemInfo || pkt == Publish) && p.canEncode(pkt, PropUser) {
 		pb := mempool.GetBuffer()
 		defer mempool.PutBuffer(pb)
 		for _, v := range p.User {

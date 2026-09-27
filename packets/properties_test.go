@@ -216,6 +216,17 @@ func TestEncodePropertiesDisallowProblemInfo(t *testing.T) {
 	require.False(t, bytes.Contains(b.Bytes(), []byte{26, 0, 8}))
 }
 
+func TestEncodePropertiesDisallowProblemInfoKeepsPublishUserProperties(t *testing.T) {
+	props := Properties{User: []UserProperty{{Key: "trace", Val: "abc"}}}
+	b := bytes.NewBuffer([]byte{})
+	props.Encode(Publish, Mods{DisallowProblemInfo: true}, b, 0)
+	require.True(t, bytes.Contains(b.Bytes(), []byte{38, 0, 5, 't', 'r', 'a', 'c', 'e', 0, 3, 'a', 'b', 'c'}))
+
+	b.Reset()
+	props.Encode(Puback, Mods{DisallowProblemInfo: true}, b, 0)
+	require.False(t, bytes.Contains(b.Bytes(), []byte{38, 0, 5}))
+}
+
 func TestEncodePropertiesDisallowResponseInfo(t *testing.T) {
 	props := propertiesStruct
 	b := bytes.NewBuffer([]byte{})

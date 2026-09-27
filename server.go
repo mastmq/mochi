@@ -31,7 +31,7 @@ const (
 	// broker's log as "2.7.9" while carrying fixes 2.7.9 does not have, which
 	// tells a reader the opposite of the truth: that the GetByListener
 	// deadlock is still in there.
-	Version                       = "2.7.12" // the current server version.
+	Version                       = "2.7.13" // the current server version.
 	defaultSysTopicInterval int64 = 1        // the interval between $SYS topic publishes
 	LocalListener                 = "local"
 	InlineClientId                = "inline"

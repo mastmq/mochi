@@ -15,6 +15,7 @@ We depend on this library, so we carry the patches we need here rather than wait
 | `Clients.GetByListener` no longer takes the read lock recursively | [#488](https://github.com/mochi-mqtt/server/issues/488), fixed identically in [#489](https://github.com/mochi-mqtt/server/pull/489) |
 | A peer that hangs up before sending a packet logs at debug, not warn, and the record has a message | not reported upstream |
 | The accept loops no longer assign to a shared `err` from inside their goroutines | not reported upstream |
+| A client that sets Request Problem Information to 0 still receives the user properties of a PUBLISH | not reported upstream |
 
 Nothing else. Every other line is upstream's, and the intent is to keep it that way: a patch here should be one that upstream has already been offered and has not taken.
 
@@ -37,6 +38,12 @@ And an `io.EOF` there is not a failure. It is a peer that opened a connection an
 An ordinary hang-up now logs at debug; a failure after the client has started speaking MQTT still warns, because then something really did go wrong.
 
 The same three lines also had a data race: `err = establish(...)` inside the spawned goroutine assigns to the `err` declared by the accept loop, and the loop keeps accepting, so several goroutines write the same variable concurrently.
+
+### User properties withheld from PUBLISH
+
+A client may set Request Problem Information to 0 in CONNECT, and `WritePacket` turns that into `Mods.DisallowProblemInfo`, which `Properties.Encode` applied to user properties on every packet type. The spec exempts PUBLISH, CONNACK and DISCONNECT [MQTT-3.1.2-29], and for a PUBLISH it is not optional: user properties are the publisher's data, and the server must forward them unaltered [MQTT-3.3.2-17]. A subscriber that opted out of diagnostics silently lost the application's metadata on every message.
+
+paho.golang sends 0 whenever a client passes connect properties without setting the flag, which is how mast's own tests found it. Only PUBLISH is exempted here; withholding them from CONNACK and DISCONNECT is still allowed, so that behaviour is left as upstream wrote it.
 
 ## The module path
 
