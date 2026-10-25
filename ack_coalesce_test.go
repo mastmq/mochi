@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mochi-mqtt/server/v2/packets"
+	"github.com/mastmq/mochi/v2/packets"
 	"github.com/stretchr/testify/require"
 )
 

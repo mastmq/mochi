@@ -16,6 +16,7 @@ We depend on this library, so we carry the patches we need here rather than wait
 | A peer that hangs up before sending a packet logs at debug, not warn, and the record has a message | not reported upstream |
 | The accept loops no longer assign to a shared `err` from inside their goroutines | not reported upstream |
 | A client that sets Request Problem Information to 0 still receives the user properties of a PUBLISH | not reported upstream |
+| PUBACK, PUBREC, PUBREL and PUBCOMP written while the next inbound packet is already buffered go out in one write | [#552](https://github.com/mochi-mqtt/server/pull/552), carried as is |
 
 Nothing else. Every other line is upstream's, and the intent is to keep it that way: a patch here should be one that upstream has already been offered and has not taken.
 
@@ -44,6 +45,14 @@ The same three lines also had a data race: `err = establish(...)` inside the spa
 A client may set Request Problem Information to 0 in CONNECT, and `WritePacket` turns that into `Mods.DisallowProblemInfo`, which `Properties.Encode` applied to user properties on every packet type. The spec exempts PUBLISH, CONNACK and DISCONNECT [MQTT-3.1.2-29], and for a PUBLISH it is not optional: user properties are the publisher's data, and the server must forward them unaltered [MQTT-3.3.2-17]. A subscriber that opted out of diagnostics silently lost the application's metadata on every message.
 
 paho.golang sends 0 whenever a client passes connect properties without setting the flag, which is how mast's own tests found it. Only PUBLISH is exempted here; withholding them from CONNACK and DISCONNECT is still allowed, so that behaviour is left as upstream wrote it.
+
+### Coalesced acks
+
+Every acknowledgement the read loop sends — PUBACK and PUBREC for an inbound PUBLISH, PUBREL for a PUBREC, PUBCOMP for a PUBREL — went through `WritePacket` on its own, and `WritePacket` buffered only while `WriteLoop`'s outbound queue was non-empty. The read loop never queues there, so every ack was a `write(2)` of its own even when the reader already held the next twenty packets. Upstream #552 holds acks in `outbuf` while the next packet is complete in the read buffer, and flushes before the reader would block, after 1ms, when the buffer fills, on any other write, and on DISCONNECT.
+
+It is carried exactly as offered, with only the import paths renamed. mast found the cost under QoS 2 load ([mastmq/mast#18](https://github.com/mastmq/mast/issues/18)): a CPU profile of a node delivering 100k QoS 2 messages a second spent 90% of its time in socket syscalls, 37% of it under `processPubrec`. With the patch, 50 publishers at 100k QoS 2 deliveries a second went from a p50 of 3.3–4.0s, with the publishers falling behind, to 99–191ms with everything delivered.
+
+What it cannot do is batch a connection with nothing behind its ack. A subscriber receiving a message every 10ms answers each one alone, so a QoS 2 delivery still costs the broker two writes and two reads, about 1.6× the CPU of a QoS 1 delivery. That is the protocol, not this code.
 
 ## The module path
 
