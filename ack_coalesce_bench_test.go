@@ -26,10 +26,10 @@ import (
 	"testing"
 	"time"
 
-	mqtt "github.com/mochi-mqtt/server/v2"
-	"github.com/mochi-mqtt/server/v2/hooks/auth"
-	"github.com/mochi-mqtt/server/v2/listeners"
-	"github.com/mochi-mqtt/server/v2/packets"
+	mqtt "github.com/mastmq/mochi/v2"
+	"github.com/mastmq/mochi/v2/hooks/auth"
+	"github.com/mastmq/mochi/v2/listeners"
+	"github.com/mastmq/mochi/v2/packets"
 )
 
 // countingConn counts Write calls the broker makes on an accepted connection.
