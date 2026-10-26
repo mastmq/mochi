@@ -7,15 +7,17 @@ on:
     # run the suite without inventing a commit for it.
     workflow_dispatch:
 
+# The Go version comes from go.mod, so CI tests what the module declares
+# rather than a second copy of it that drifts.
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.21
+          go-version-file: go.mod
       - name: Vet
         run: go vet ./...
       - name: Test
@@ -25,12 +27,12 @@ jobs:
     name: Test with Coverage
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.21'
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: Install dependencies
         run: |
           go mod download
