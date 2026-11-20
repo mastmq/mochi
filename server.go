@@ -463,6 +463,7 @@ func (s *Server) attachClient(cl *Client, listener string) error {
 
 	err = s.SendConnack(cl, code, sessionPresent, nil) // [MQTT-3.1.4-5] [MQTT-3.2.0-1] [MQTT-3.2.0-2] &[MQTT-3.14.0-1]
 	if err != nil {
+		s.detachClient(cl, err, listener)
 		return fmt.Errorf("ack connection packet: %w", err)
 	}
 
@@ -471,6 +472,7 @@ func (s *Server) attachClient(cl *Client, listener string) error {
 	if sessionPresent {
 		err = cl.ResendInflightMessages(true)
 		if err != nil {
+			s.detachClient(cl, err, listener)
 			return fmt.Errorf("resend inflight: %w", err)
 		}
 	}
@@ -478,12 +480,33 @@ func (s *Server) attachClient(cl *Client, listener string) error {
 	s.hooks.OnSessionEstablished(cl, pk)
 
 	err = cl.Read(s.receivePacket)
+	if err == nil {
+		cl.Properties.Will = Will{} // [MQTT-3.14.4-3] [MQTT-3.1.2-10]
+	}
+
+	s.detachClient(cl, err, listener)
+
+	return err
+}
+
+// detachClient ends a client that has been added to the client list, however
+// its connection ended. Once Clients.Add has run, every return from
+// attachClient must pass through here: a hook that counted the client in
+// OnConnectAuthenticate is told it went in OnDisconnect, and a client with no
+// session to keep is removed. A failed CONNACK write or a failed resend of a
+// resumed session's inflight messages used to return without either, which
+// left the client counted by every hook for the life of the process. A failed
+// resend is ordinary: it is any device that drops, or is taken over, while
+// its backlog is being sent.
+//
+// A non-nil err is a connection that ended without DISCONNECT, so the will is
+// sent, as it is when reading fails.
+func (s *Server) detachClient(cl *Client, err error, listener string) {
 	if err != nil {
 		s.sendLWT(cl)
 		cl.Stop(err)
-	} else {
-		cl.Properties.Will = Will{} // [MQTT-3.14.4-3] [MQTT-3.1.2-10]
 	}
+
 	s.Log.Debug("client disconnected", "error", err, "client", cl.ID, "remote", cl.Net.Remote, "listener", listener)
 
 	expire := (cl.Properties.ProtocolVersion == 5 && cl.Properties.Props.SessionExpiryInterval == 0) || (cl.Properties.ProtocolVersion < 5 && cl.Properties.Clean)
@@ -494,8 +517,6 @@ func (s *Server) attachClient(cl *Client, listener string) error {
 		s.UnsubscribeClient(cl)
 		s.Clients.Delete(cl.ID) // [MQTT-4.1.0-2] ![MQTT-3.1.2-23]
 	}
-
-	return err
 }
 
 // readConnectionPacket reads the first incoming header for a connection, and if
