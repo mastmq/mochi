@@ -3933,3 +3933,83 @@ func TestMinimum(t *testing.T) {
 	require.EqualValues(t, -1, minimum(-1, 20))
 	require.EqualValues(t, -2, minimum(-1, -2))
 }
+
+// disconnectCounter counts OnDisconnect calls.
+type disconnectCounter struct {
+	HookBase
+	disconnects atomic.Int32
+}
+
+func (h *disconnectCounter) ID() string { return "disconnect-counter" }
+
+func (h *disconnectCounter) Provides(b byte) bool { return b == OnDisconnect }
+
+func (h *disconnectCounter) OnDisconnect(cl *Client, err error, expire bool) {
+	h.disconnects.Add(1)
+}
+
+// TestServerEstablishConnectionConnackFailureDisconnects covers a peer that
+// goes before its CONNACK can be written. The client had been added and
+// authenticated, so the hooks have to hear that it went.
+func TestServerEstablishConnectionConnackFailureDisconnects(t *testing.T) {
+	s := newServer()
+	hook := new(disconnectCounter)
+	require.NoError(t, s.AddHook(hook, nil))
+
+	r, w := net.Pipe()
+	o := make(chan error)
+	go func() {
+		o <- s.EstablishConnection("tcp", r)
+	}()
+
+	_, _ = w.Write(packets.TPacketData[packets.Connect].Get(packets.TConnectClean).RawBytes)
+	_ = w.Close()
+
+	err := <-o
+	require.Error(t, err)
+	require.Equal(t, int32(1), hook.disconnects.Load())
+
+	_, ok := s.Clients.Get("zen")
+	require.False(t, ok, "a clean session that never got its CONNACK was left in the client list")
+}
+
+// TestServerEstablishConnectionResendFailureDisconnects covers a resumed
+// session whose inflight messages cannot be resent because the peer went
+// after reading its CONNACK, which is what a device on a poor link does.
+func TestServerEstablishConnectionResendFailureDisconnects(t *testing.T) {
+	s := newServer()
+	hook := new(disconnectCounter)
+	require.NoError(t, s.AddHook(hook, nil))
+
+	// An absent session with a message waiting for it.
+	existing, _, _ := newTestClient()
+	existing.ID = "zen"
+	existing.Properties.ProtocolVersion = 4
+	existing.Properties.Clean = false
+	existing.State.Inflight.Set(packets.Packet{
+		FixedHeader: packets.FixedHeader{Type: packets.Publish, Qos: 1},
+		TopicName:   "a/b",
+		Payload:     []byte("waiting"),
+		PacketID:    7,
+	})
+	existing.Stop(nil)
+	s.Clients.Add(existing)
+
+	r, w := net.Pipe()
+	o := make(chan error)
+	go func() {
+		o <- s.EstablishConnection("tcp", r)
+	}()
+
+	_, _ = w.Write(packets.TPacketData[packets.Connect].Get(packets.TConnectMqtt311).RawBytes)
+
+	ack := make([]byte, 4)
+	_, err := io.ReadFull(w, ack)
+	require.NoError(t, err)
+	require.Equal(t, []byte{packets.Connack << 4, 2, 1, 0}, ack, "the session should have been resumed")
+	_ = w.Close()
+
+	err = <-o
+	require.ErrorContains(t, err, "resend inflight")
+	require.Equal(t, int32(1), hook.disconnects.Load())
+}
