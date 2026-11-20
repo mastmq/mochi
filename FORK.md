@@ -17,6 +17,7 @@ We depend on this library, so we carry the patches we need here rather than wait
 | The accept loops no longer assign to a shared `err` from inside their goroutines | not reported upstream |
 | A client that sets Request Problem Information to 0 still receives the user properties of a PUBLISH | not reported upstream |
 | PUBACK, PUBREC, PUBREL and PUBCOMP written while the next inbound packet is already buffered go out in one write | [#552](https://github.com/mochi-mqtt/server/pull/552), carried as is |
+| A client whose CONNACK write or inflight resend fails still reaches `OnDisconnect` | not reported upstream |
 
 Nothing else. Every other line is upstream's, and the intent is to keep it that way: a patch here should be one that upstream has already been offered and has not taken.
 
@@ -53,6 +54,12 @@ Every acknowledgement the read loop sends — PUBACK and PUBREC for an inbound P
 It is carried exactly as offered, with only the import paths renamed. mast found the cost under QoS 2 load ([mastmq/mast#18](https://github.com/mastmq/mast/issues/18)): a CPU profile of a node delivering 100k QoS 2 messages a second spent 90% of its time in socket syscalls, 37% of it under `processPubrec`. With the patch, 50 publishers at 100k QoS 2 deliveries a second went from a p50 of 3.3–4.0s, with the publishers falling behind, to 99–191ms with everything delivered.
 
 What it cannot do is batch a connection with nothing behind its ack. A subscriber receiving a message every 10ms answers each one alone, so a QoS 2 delivery still costs the broker two writes and two reads, about 1.6× the CPU of a QoS 1 delivery. That is the protocol, not this code.
+
+### OnDisconnect on every path
+
+`attachClient` adds a client to the client list and runs `OnConnectAuthenticate` before it writes the CONNACK, and on a resumed session it resends the inflight messages after it. When either write failed it returned at once, so `OnDisconnect` never ran, a client with no session to keep stayed in the client list, and its will was not sent. A hook that counted the client when it authenticated counted it for the life of the process.
+
+The resend case is not exotic. It is any device with messages waiting that drops, or is taken over, while they are being resent, which on a mobile link is a matter of time. mast found it as a per-tenant connection limit that filled up and never emptied: [mastmq/mast#32](https://github.com/mastmq/mast/pull/32). Every return after `Clients.Add` now goes through `detachClient`, which is the old tail of `attachClient`: the will on an unclean end, `OnDisconnect`, and the clean-session cleanup.
 
 ## The module path
 
