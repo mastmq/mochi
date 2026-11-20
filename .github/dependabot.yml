@@ -1,0 +1,25 @@
+---
+version: 2
+updates:
+  # This fork tries to stay a small, readable diff from upstream, and every
+  # bump here widens it. They are still worth taking: upstream has stopped
+  # merging, so nobody else will. Most of these modules back the storage hooks
+  # (badger, pebble, bolt, redis) that mast does not use, so one grouped PR a
+  # week is the right amount of attention. Majors stay separate, because a
+  # major is an API change someone has to read.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gomod:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
