@@ -4013,3 +4013,60 @@ func TestServerEstablishConnectionResendFailureDisconnects(t *testing.T) {
 	require.ErrorContains(t, err, "resend inflight")
 	require.Equal(t, int32(1), hook.disconnects.Load())
 }
+
+// TestServerTakeoverOfAClientThatStoppedReading covers a device that
+// reconnects while its old connection is still open and no longer read, which
+// is a phone whose old socket the network has not torn down yet. The old
+// client is blocked in a write under its lock, and the takeover has to take
+// that lock to send it DISCONNECT. Without a write timeout the new connection
+// never gets its CONNACK.
+func TestServerTakeoverOfAClientThatStoppedReading(t *testing.T) {
+	s := newServer()
+	s.Options.ClientNetWriteTimeout = 100 * time.Millisecond
+
+	oldR, oldW := net.Pipe()
+	defer oldW.Close()
+	go func() { _ = s.EstablishConnection("tcp", oldR) }()
+
+	_, err := oldW.Write(packets.TPacketData[packets.Connect].Get(packets.TConnectMqtt311).RawBytes)
+	require.NoError(t, err)
+	ack := make([]byte, 4)
+	_, err = io.ReadFull(oldW, ack)
+	require.NoError(t, err)
+
+	old, ok := s.Clients.Get("zen")
+	require.True(t, ok)
+
+	// A write the old peer never reads, holding the old client's lock.
+	go func() {
+		_ = old.WritePacket(packets.Packet{
+			FixedHeader: packets.FixedHeader{Type: packets.Publish},
+			TopicName:   "a/b",
+			Payload:     []byte("unread"),
+		})
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	newR, newW := net.Pipe()
+	defer newW.Close()
+	go func() { _ = s.EstablishConnection("tcp", newR) }()
+
+	_, err = newW.Write(packets.TPacketData[packets.Connect].Get(packets.TConnectMqtt311).RawBytes)
+	require.NoError(t, err)
+
+	got := make(chan error, 1)
+	go func() {
+		_, err := io.ReadFull(newW, ack)
+		got <- err
+	}()
+
+	select {
+	case err := <-got:
+		require.NoError(t, err)
+		require.Equal(t, byte(packets.Connack<<4), ack[0])
+	case <-time.After(3 * time.Second):
+		t.Fatal("the takeover never answered: it is waiting for the old client's lock, " +
+			"which a write to a peer that stopped reading holds")
+	}
+	require.True(t, old.Closed())
+}

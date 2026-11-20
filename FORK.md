@@ -18,6 +18,7 @@ We depend on this library, so we carry the patches we need here rather than wait
 | A client that sets Request Problem Information to 0 still receives the user properties of a PUBLISH | not reported upstream |
 | PUBACK, PUBREC, PUBREL and PUBCOMP written while the next inbound packet is already buffered go out in one write | [#552](https://github.com/mochi-mqtt/server/pull/552), carried as is |
 | A client whose CONNACK write or inflight resend fails still reaches `OnDisconnect` | not reported upstream |
+| `Options.ClientNetWriteTimeout` bounds a write made under the client lock, so a client that stops reading cannot hold that lock, or hang a takeover of its session | [#531](https://github.com/mochi-mqtt/server/pull/531), adapted to #552 |
 
 Nothing else. Every other line is upstream's, and the intent is to keep it that way: a patch here should be one that upstream has already been offered and has not taken.
 
@@ -60,6 +61,14 @@ What it cannot do is batch a connection with nothing behind its ack. A subscribe
 `attachClient` adds a client to the client list and runs `OnConnectAuthenticate` before it writes the CONNACK, and on a resumed session it resends the inflight messages after it. When either write failed it returned at once, so `OnDisconnect` never ran, a client with no session to keep stayed in the client list, and its will was not sent. A hook that counted the client when it authenticated counted it for the life of the process.
 
 The resend case is not exotic. It is any device with messages waiting that drops, or is taken over, while they are being resent, which on a mobile link is a matter of time. mast found it as a per-tenant connection limit that filled up and never emptied: [mastmq/mast#32](https://github.com/mastmq/mast/pull/32). Every return after `Clients.Add` now goes through `detachClient`, which is the old tail of `attachClient`: the will on an unclean end, `OnDisconnect`, and the clean-session cleanup.
+
+### Bounded writes
+
+`WritePacket` takes the client lock and writes to the socket inside it, with no write deadline of its own. A client that stops reading with its connection still open fills the socket buffer, and the write blocks with the lock held for as long as the connection lives. Everything else that needs the lock waits behind it: `publishToClient` taking a packet identifier for a QoS 1 delivery, which is before the outbound queue that would have shed the slow client, and `DisconnectClient` when a new connection takes the session over. mast found the takeover case while writing the test for the `OnDisconnect` leak above: a device that reconnects while its old connection still has a backlog being resent never gets its CONNACK.
+
+Upstream #531 adds `Options.ClientNetWriteTimeout`. Zero, the default, changes nothing; set, the deadline is armed and cleared inside the same critical section as the write, a timed-out write in `WriteLoop` stops the client because a partial packet is already on the wire, `refreshDeadline` sets the read deadline only so a client that keeps sending cannot clear the write deadline, and the websocket connection takes the deadline itself because gorilla overwrites one set on the socket. It is carried as offered with one change: #552 gave writes two paths, the direct write and the flush of the coalescing buffer from `writePacket` and from `Read`, so the deadline is armed on each path that writes rather than once at the top of `WritePacket`, which would cost two syscalls for every ack that is only buffered. `TestServerTakeoverOfAClientThatStoppedReading` hangs without the option and passes with it.
+
+The embedder has to set the option. mast does not get the fix by taking the version alone.
 
 ## The module path
 
