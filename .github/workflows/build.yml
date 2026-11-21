@@ -40,11 +40,13 @@ jobs:
 
   # Reachable vulnerabilities only, like mast: most of go.sum backs storage
   # hooks mast never compiles, and failing on those would make red meaningless.
+  # Stable Go, not the go.mod floor: govulncheck itself needs a newer Go than
+  # the floor, and the standard library mast ships is the newer one anyway.
   govulncheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version: stable
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
