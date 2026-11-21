@@ -1043,8 +1043,16 @@ func (s *Server) publishToSubscribers(pk packets.Packet) {
 	}
 
 	subscribers := s.Topics.Subscribers(pk.TopicName)
+	// OnSelectSubscribers is documented as the place to remove or add any
+	// subscriber, but it was called only when a shared subscriber matched,
+	// so a hook could not narrow a publish that reached plain subscribers
+	// alone. mast needs it there: it injects every message through one
+	// inline client, so mochi's own No Local check compares against the
+	// wrong origin, and the $-topic rule never sees the topic as the device
+	// does. Calling it costs one load of the hook list when nothing
+	// provides it.
+	subscribers = s.hooks.OnSelectSubscribers(subscribers, pk)
 	if len(subscribers.Shared) > 0 {
-		subscribers = s.hooks.OnSelectSubscribers(subscribers, pk)
 		if len(subscribers.SharedSelected) == 0 {
 			subscribers.SelectShared()
 		}

@@ -19,6 +19,7 @@ We depend on this library, so we carry the patches we need here rather than wait
 | PUBACK, PUBREC, PUBREL and PUBCOMP written while the next inbound packet is already buffered go out in one write | [#552](https://github.com/mochi-mqtt/server/pull/552), carried as is |
 | A client whose CONNACK write or inflight resend fails still reaches `OnDisconnect` | not reported upstream |
 | `Options.ClientNetWriteTimeout` bounds a write made under the client lock, so a client that stops reading cannot hold that lock, or hang a takeover of its session | [#531](https://github.com/mochi-mqtt/server/pull/531), adapted to #552 |
+| `OnSelectSubscribers` runs for every publish, not only one that matches a shared subscription | not reported upstream |
 | `TestEstablishConnectionInheritExistingTrueTakeover` reads the first client before the second connection starts, so a slow runner cannot hand it the second one | not reported upstream; a test-only race that failed CI one run in several |
 
 Nothing else. Every other line is upstream's, and the intent is to keep it that way: a patch here should be one that upstream has already been offered and has not taken.
@@ -70,6 +71,12 @@ The resend case is not exotic. It is any device with messages waiting that drops
 Upstream #531 adds `Options.ClientNetWriteTimeout`. Zero, the default, changes nothing; set, the deadline is armed and cleared inside the same critical section as the write, a timed-out write in `WriteLoop` stops the client because a partial packet is already on the wire, `refreshDeadline` sets the read deadline only so a client that keeps sending cannot clear the write deadline, and the websocket connection takes the deadline itself because gorilla overwrites one set on the socket. It is carried as offered with one change: #552 gave writes two paths, the direct write and the flush of the coalescing buffer from `writePacket` and from `Read`, so the deadline is armed on each path that writes rather than once at the top of `WritePacket`, which would cost two syscalls for every ack that is only buffered. `TestServerTakeoverOfAClientThatStoppedReading` hangs without the option and passes with it.
 
 The embedder has to set the option. mast does not get the fix by taking the version alone.
+
+### OnSelectSubscribers on every publish
+
+The hook is documented as the place to "remove or add clients to a publish to subscribers process", but `publishToSubscribers` called it only when a shared subscription matched. A publish that reached plain subscribers alone could not be narrowed at all.
+
+mast found it through the Eclipse Paho interoperability suite. It injects every message through one inline client, so mochi's own No Local check compared the subscriber with the inline client rather than the publisher and never matched ([mastmq/mast#37](https://github.com/mastmq/mast/issues/37)), and it mounts every topic under a tenant, so mochi's rule that a filter starting with a wildcard does not match a `$` topic looked at the tenant instead of the topic ([mastmq/mast#35](https://github.com/mastmq/mast/issues/35)). Both are corrected in the hook, which has to run for that. The shared selection after it is unchanged. When no hook provides it, the call costs one load of the hook list. `TestPublishToSubscribersSelectsWithoutShared` fails without the change.
 
 ## The module path
 
