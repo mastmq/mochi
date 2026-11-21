@@ -722,6 +722,14 @@ func TestEstablishConnectionInheritExistingTrueTakeover(t *testing.T) {
 	cl1.State.Subscriptions.Add("d/e/f", packets.Subscription{Filter: "d/e/f", Qos: 0})
 	time.Sleep(time.Millisecond * 50)
 
+	// Capture first Client pointer. This has to happen before the second
+	// connection starts: read after it, a slow runner lets the takeover finish
+	// first, and the lookup returns the second client instead.
+	clp1, ok := s.Clients.Get("zen")
+	require.True(t, ok)
+	require.Empty(t, clp1.Properties.Username)
+	require.NotEmpty(t, clp1.State.Subscriptions.GetAll())
+
 	// Make the second connection
 	r2, w2 := net.Pipe()
 	o2 := make(chan error)
@@ -742,12 +750,6 @@ func TestEstablishConnectionInheritExistingTrueTakeover(t *testing.T) {
 		require.NoError(t, err)
 		recv2 <- buf
 	}()
-
-	// Capture first Client pointer
-	clp1, ok := s.Clients.Get("zen")
-	require.True(t, ok)
-	require.Empty(t, clp1.Properties.Username)
-	require.NotEmpty(t, clp1.State.Subscriptions.GetAll())
 
 	err1 := <-o1
 	require.Error(t, err1)
