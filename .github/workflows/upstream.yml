@@ -1,0 +1,38 @@
+name: upstream
+
+# Upstream stopped merging on 2025-03-01 (FORK.md). If it ever starts again,
+# that is the most important thing that can happen to this fork, and nobody
+# would notice by looking. This opens one issue when upstream's main or its
+# tags move past what this fork has merged.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: compare with upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git remote add upstream https://github.com/mochi-mqtt/server.git
+          git fetch --quiet --tags upstream main
+          new=$(git log --oneline HEAD..upstream/main)
+          tag=$(git ls-remote --tags --sort=-v:refname upstream 'v2.*' | grep -v '\^{}' | head -1 | sed 's|.*refs/tags/||')
+          if [ -z "$new" ]; then echo "upstream main is merged (latest tag $tag)"; exit 0; fi
+          title="Upstream moved: mochi-mqtt/server has unmerged commits"
+          if gh issue list --state open --search "in:title \"$title\"" --json number -q '.[].number' | grep -q .; then
+            echo "issue already open"; exit 0
+          fi
+          # shellcheck disable=SC2016 # the backticks are Markdown, not a command
+          printf 'Upstream `main` has commits this fork has not merged (latest upstream tag `%s`):\n\n```\n%s\n```\n\nMerge `upstream/main`, keep the patches in FORK.md, run the suite, then tag a release so mast can take it.\n' "$tag" "$new" > body.md
+          gh issue create --title "$title" --body-file body.md

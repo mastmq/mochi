@@ -7,37 +7,44 @@ on:
     # run the suite without inventing a commit for it.
     workflow_dispatch:
 
-# The Go version comes from go.mod, so CI tests what the module declares
-# rather than a second copy of it that drifts.
 jobs:
-  build:
+  # Two Go versions: the one go.mod declares, so CI tests what the module
+  # promises its importers, and the newest stable, so a Go release that breaks
+  # this code shows up here before it shows up in mast, which builds with a
+  # newer Go than the floor declared here. The job names are required checks
+  # on main (Dependabot auto-merge waits for them), so keep them stable.
+  test:
+    name: test (${{ matrix.go }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [go.mod, stable]
     steps:
       - uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version-file: ${{ matrix.go == 'go.mod' && 'go.mod' || '' }}
+          go-version: ${{ matrix.go == 'stable' && 'stable' || '' }}
       - name: Vet
         run: go vet ./...
+      # A Dependabot bump that leaves go.mod or go.sum untidy would build here
+      # and then fail for whoever runs `go mod tidy` next.
+      - name: Tidy
+        run: go mod tidy -diff
       - name: Test
-        run: go test -race ./... && echo true
+        run: go test -race -covermode atomic -coverprofile=covprofile ./...
+      - name: Coverage
+        run: go tool cover -func=covprofile | tail -1
 
-  coverage:
-    name: Test with Coverage
+  # Reachable vulnerabilities only, like mast: most of go.sum backs storage
+  # hooks mast never compiles, and failing on those would make red meaningless.
+  govulncheck:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v7
-      - name: Set up Go
-        uses: actions/setup-go@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Install dependencies
-        run: |
-          go mod download
-      - name: Run Unit tests
-        run: |
-          go test -race -covermode atomic -coverprofile=covprofile ./...
-      - name: Report coverage
-        run: go tool cover -func=covprofile | tail -1
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

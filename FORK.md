@@ -2,7 +2,7 @@
 
 This is [`mochi-mqtt/server`](https://github.com/mochi-mqtt/server), the MQTT library [mast](https://github.com/mastmq/mast) embeds to terminate MQTT. It is MIT licensed and all credit for it belongs upstream: mochi-co and the contributors listed there wrote it, and the SPDX headers on every file still say so.
 
-It is **detached** from the GitHub fork network rather than being a fork in the GitHub sense, so it is a repository of its own with its own issues and its own module path.
+It is **detached** from the GitHub fork network rather than being a fork in the GitHub sense, so it is a repository of its own with its own issues and its own module path. Issues are on for that reason, and `upstream.yml` files one there when upstream moves.
 
 The fork exists because upstream has stopped merging. The last commit to `mochi-mqtt/server@main` is dated **2025-03-01**, which is also the date of the latest release, `v2.7.9`. There are 47 open pull requests, and [#515, "Is the project still maintained?"](https://github.com/mochi-mqtt/server/issues/515) has been open since August 2026 with no maintainer reply.
 
@@ -93,3 +93,15 @@ upstream  no-push-use-origin (push)
 Keep `main` as close to upstream as it can be. If upstream ever revives, the difference should be small enough to send back as a pull request and then drop from here.
 
 Two things were removed rather than carried, because they belong to upstream and not to us: the `docker` job in `.github/workflows/build.yml`, which pushed to the `mochimqtt/server` Docker Hub repository with credentials we do not have, and the Coveralls and Stargazers badges, which would have reported another project's numbers as though they were this one's.
+
+## Keeping it current
+
+Upstream no longer upgrades anything, so this fork has to. Four pieces do it, and each one exists because the step it automates was easy to forget.
+
+**Dependabot** opens one grouped PR a week for Go modules and one for actions, and a monthly one for the example Dockerfile. `dependabot-automerge.yml` turns on auto-merge for minor and patch bumps, so they merge once the required checks pass; a major waits for a person. The required checks on `main` are `test (go.mod)`, `test (stable)` and `govulncheck`. Renaming a job in `build.yml` silently blocks every auto-merge until branch protection names it too.
+
+**Two Go versions in CI.** `go.mod` declares the floor this module promises its importers, and CI tests that floor. CI also tests the newest stable Go, because mast builds with a newer Go than the floor, and a Go release that breaks this code should fail here first. Raise the `go` line in `go.mod` only when the code needs a newer feature: every raise forces it on every importer.
+
+**`upstream.yml`** fetches `mochi-mqtt/server` every Monday and opens an issue if upstream's `main` has commits this fork has not merged. If upstream revives, merge it, keep the patches in the table above, and offer them back.
+
+**A release is still a person's decision.** A merged bump reaches nobody until it is tagged. Tag when a bump changes a module mast compiles (the packet, listener and hook code, not the storage hooks), when `govulncheck` reports something reachable, or at least monthly when bumps have piled up. Bump the version string in `server.go` in the same commit, then push the `v2.x.y` tag. mast's Dependabot keeps `github.com/mastmq/mochi/*` out of its grouped PR, so the new tag arrives in mast as a PR of its own, where the cluster suite decides whether it is safe.
