@@ -1883,6 +1883,47 @@ func TestPublishToSubscribersSelfNoLocal(t *testing.T) {
 	require.Equal(t, []byte{}, <-receiverBuf)
 }
 
+// dropAllSubscribers is a hook that removes every plain subscriber from a
+// publish, the narrowing OnSelectSubscribers is documented to allow.
+type dropAllSubscribers struct {
+	HookBase
+}
+
+func (h *dropAllSubscribers) ID() string { return "drop-all-subscribers" }
+
+func (h *dropAllSubscribers) Provides(b byte) bool { return b == OnSelectSubscribers }
+
+func (h *dropAllSubscribers) OnSelectSubscribers(subs *Subscribers, _ packets.Packet) *Subscribers {
+	clear(subs.Subscriptions)
+	return subs
+}
+
+// TestPublishToSubscribersSelectsWithoutShared pins that OnSelectSubscribers
+// runs for a publish that matches no shared subscription. It used to run only
+// when one did, so a hook could not remove a plain subscriber at all.
+func TestPublishToSubscribersSelectsWithoutShared(t *testing.T) {
+	s := newServer()
+	require.NoError(t, s.AddHook(new(dropAllSubscribers), nil))
+	cl, r, w := newTestClient()
+	s.Clients.Add(cl)
+	require.True(t, s.Topics.Subscribe(cl.ID, packets.Subscription{Filter: "a/b/c"}))
+
+	go func() {
+		s.publishToSubscribers(*packets.TPacketData[packets.Publish].Get(packets.TPublishBasic).Packet)
+		time.Sleep(time.Millisecond)
+		_ = w.Close()
+	}()
+
+	receiverBuf := make(chan []byte)
+	go func() {
+		buf, err := io.ReadAll(r)
+		require.NoError(t, err)
+		receiverBuf <- buf
+	}()
+
+	require.Equal(t, []byte{}, <-receiverBuf)
+}
+
 func TestPublishToSubscribers(t *testing.T) {
 	s := newServer()
 	cl, r1, w1 := newTestClient()
